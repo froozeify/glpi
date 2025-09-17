@@ -54,6 +54,28 @@
    </div>
 {% endmacro %}
 
+{% macro smallTitle(label, icon = '', helper = '', id = '') %}
+    {% set margins = 'mt-2 mb-2' %}
+    {% set id = id != '' ? id : 'formsection' ~ random() %}
+
+    <div class="card border-0 shadow-none p-0 m-0 {{ margins }}">
+        <div id="{{ id }}" class="card-header mb-1 p-0 ps-3 py-1">
+            <h4 class="card-subtitle {{ icon|length ? 'ms-4' : '' }}">
+                {% if icon|length %}
+                    <div class="ribbon ribbon-bookmark ribbon-top ribbon-start bg-blue s-1">
+                        <i class="fs-2x {{ icon }}"></i>
+                    </div>
+                {% endif %}
+                <span class="ms-2">{{ label }}</span>
+                {% if helper is not empty %}
+                    <span class="form-help" data-bs-toggle="popover" data-bs-placement="top" data-bs-html="true"
+                          data-bs-content="{{ helper }}">?</span>
+                {% endif %}
+            </h4>
+        </div>
+    </div>
+{% endmacro %}
+
 {% macro hrTitle(label, icon = '', position = 'center') %}
     {#
         position: Can be `center`, `start` or `end`
@@ -65,30 +87,6 @@
          <span>{{ label }}</span>
       </div>
    </div>
-{% endmacro %}
-
-{% macro largeTitle(label, icon = '', first = false, helper = '') %}
-    {% set margins = 'mt-3' %}
-    {% if first %}
-        {% set margins = 'mt-n2' %}
-    {% endif %}
-
-    <div class="card border-0 shadow-none p-0 m-0 {{ margins }}">
-        <div class="card-header mb-3 pt-2 border-top rounded-0">
-            <h4 class="card-title {{ icon|length ? 'ms-5' : '' }}">
-                {% if icon|length %}
-                    <div class="ribbon ribbon-bookmark ribbon-top ribbon-start bg-blue s-1">
-                        <i class="fs-2x {{ icon }}"></i>
-                    </div>
-                {% endif %}
-                {{ label }}
-                {% if helper is not empty %}
-                    <span class="form-help" data-bs-toggle="popover" data-bs-placement="top" data-bs-html="true"
-                          data-bs-content="{{ helper }}">?</span>
-                {% endif %}
-            </h4>
-        </div>
-    </div>
 {% endmacro %}
 
 {% macro autoNameField(name, item, label = '', withtemplate = 0, options = {}) %}
