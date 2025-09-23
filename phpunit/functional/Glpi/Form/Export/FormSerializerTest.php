@@ -76,9 +76,11 @@ use Glpi\Form\QuestionType\QuestionTypeShortText;
 use Glpi\Form\Section;
 use Glpi\Tests\FormBuilder;
 use Glpi\Tests\FormTesterTrait;
+use Glpi\UI\IllustrationManager;
 use ITILCategory;
 use Location;
 use Monitor;
+use Ramsey\Uuid\Uuid;
 use Session;
 
 final class FormSerializerTest extends \DbTestCase
@@ -497,6 +499,46 @@ final class FormSerializerTest extends \DbTestCase
                 'forms_sections_id' => array_values($form_copy->getSections())[1]->fields['id'],
             ],
         ], $questions_data);
+    }
+
+    public function testExportAndImportExtraDataFromItemDropdownQuestion(): void
+    {
+        // Arrange: create a form with an item dropdown question that reference
+        // a specific itil category
+        $category1 = $this->createItem(ITILCategory::class, [
+            'name' => "My category 1",
+            'entities_id' => $this->getTestRootEntity(only_id: true),
+        ]);
+        $category2 = $this->createItem(ITILCategory::class, [
+            'name' => "My category 2",
+            'entities_id' => $this->getTestRootEntity(only_id: true),
+        ]);
+        $builder = new FormBuilder();
+        $extra_data = new QuestionTypeItemDropdownExtraDataConfig(
+            itemtype: ITILCategory::class,
+            root_items_id: $category1->getId(),
+        );
+        $extra_data = json_encode($extra_data);
+        $builder->addQuestion("Category", QuestionTypeItemDropdown::class, extra_data: $extra_data);
+        $form = $this->createForm($builder);
+
+        // Act: delete the category, then import the form using another category
+        $this->login();
+        $json = $this->exportForm($form);
+        $this->deleteItem(ITILCategory::class, $category1->getID(), true);
+        $mapper = new DatabaseMapper(Session::getActiveEntities());
+        $mapper->addMappedItem(
+            ITILCategory::class,
+            "My category 1",
+            $category2->getID(),
+        );
+        $form = $this->importForm($json, $mapper);
+
+        // Assert: the imported form should reference the second category
+        $question = Question::getByID($this->getQuestionId($form, "Category"));
+        $config = $question->getExtraDataConfig();
+        /** @var QuestionTypeItemDropdownExtraDataConfig $config */
+        $this->assertEquals($category2->getID(), $config->getRootItemsId());
     }
 
     public function testExportAndImportSubmitButtonConditions(): void
@@ -1488,6 +1530,54 @@ final class FormSerializerTest extends \DbTestCase
         $this->assertInstanceOf(Question::class, $question);
         $this->assertInstanceOf(QuestionTypeItem::class, $question->getQuestionType());
         $this->assertEquals(0, (new QuestionTypeItem())->getDefaultValueItemId($question));
+    }
+
+    public function testExportAndImportWithCustomIcon(): void
+    {
+        // Arrange: create a form with a custom icon
+        $illustration_manager = new IllustrationManager();
+        $entity_id = $this->getTestRootEntity(only_id: true);
+
+        $custom_icon_source = GLPI_ROOT . "/tests/fixtures/uploads/foo.png";
+        $file_name = Uuid::uuid4() . "-foo.png";
+        $tmp_file_path = GLPI_TMP_DIR . "/$file_name";
+
+        copy($custom_icon_source, $tmp_file_path);
+        $illustration_manager->saveCustomIllustration($file_name, $tmp_file_path);
+
+        $saved_icon_path = GLPI_PICTURE_DIR . "/illustrations/" . $file_name;
+        if (!file_exists($saved_icon_path)) {
+            $this->fail("Failed to save icon");
+        }
+
+        $icon_key = IllustrationManager::CUSTOM_SCENE_PREFIX . "$file_name";
+        $form = $this->createItem(Form::class, [
+            'name'         => "My form with a custom icon",
+            'illustration' => $icon_key,
+            'entities_id'  => $entity_id,
+        ]);
+
+        // Act: export the form, then delete the icon to simulate a situation
+        // where we would import the form into a GLPI where the icon doesn't exist
+        $json = $this->exportForm($form);
+        unlink($saved_icon_path);
+        if (file_exists($saved_icon_path) || file_exists($tmp_file_path)) {
+            $this->fail("Failed to delete icon files");
+        }
+        $imported_form = $this->importForm($json, new DatabaseMapper([$entity_id]));
+
+        // Assert: the icon should be created and used by the form
+        $this->assertEquals($icon_key, $imported_form->fields['illustration']);
+        $icon_key_without_prefix = substr(
+            $imported_form->fields['illustration'],
+            strlen(IllustrationManager::CUSTOM_SCENE_PREFIX),
+        );
+        $path = $illustration_manager->getCustomIllustrationFile(
+            $icon_key_without_prefix
+        );
+        $this->assertNotNull($path);
+        $this->assertFileExists($path);
+        $this->assertEquals(md5_file($custom_icon_source), md5_file($path));
     }
 
     private function compareValuesForRelations(

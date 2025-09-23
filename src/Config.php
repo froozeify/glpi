@@ -589,6 +589,7 @@ class Config extends CommonDBTM
         $endpoint_doc = $current_version['endpoint'] . '/doc';
 
         TemplateRenderer::getInstance()->display('pages/setup/general/api_setup.html.twig', [
+            'config_object' => new Config(),
             'config' => $CFG_GLPI,
             'canedit' => static::canUpdate(),
             'getting_started_doc_url' => $getting_started_doc,
@@ -2044,5 +2045,11 @@ class Config extends CommonDBTM
         global $CFG_GLPI;
 
         return (bool) ($CFG_GLPI['allow_unauthenticated_uploads'] ?? false);
+    }
+
+    public static function isHlApiEnabled(): bool
+    {
+        global $CFG_GLPI;
+        return (bool) ($CFG_GLPI['enable_hlapi'] ?? 0);
     }
 }

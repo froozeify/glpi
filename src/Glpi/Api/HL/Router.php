@@ -36,6 +36,7 @@
 namespace Glpi\Api\HL;
 
 use Auth;
+use Config;
 use DropdownTranslation;
 use Glpi\Api\HL\Controller\AbstractController;
 use Glpi\Api\HL\Controller\AdministrationController;
@@ -51,12 +52,14 @@ use Glpi\Api\HL\Controller\ManagementController;
 use Glpi\Api\HL\Controller\ProjectController;
 use Glpi\Api\HL\Controller\ReportController;
 use Glpi\Api\HL\Controller\RuleController;
+use Glpi\Api\HL\Controller\SetupController;
 use Glpi\Api\HL\Middleware\AbstractMiddleware;
 use Glpi\Api\HL\Middleware\AuthMiddlewareInterface;
 use Glpi\Api\HL\Middleware\CookieAuthMiddleware;
 use Glpi\Api\HL\Middleware\CRUDRequestMiddleware;
 use Glpi\Api\HL\Middleware\DebugRequestMiddleware;
 use Glpi\Api\HL\Middleware\DebugResponseMiddleware;
+use Glpi\Api\HL\Middleware\InternalAuthMiddleware;
 use Glpi\Api\HL\Middleware\IPRestrictionRequestMiddleware;
 use Glpi\Api\HL\Middleware\MiddlewareInput;
 use Glpi\Api\HL\Middleware\OAuthRequestMiddleware;
@@ -227,6 +230,7 @@ EOT;
             self::$instance->registerController(new GraphQLController());
             self::$instance->registerController(new ReportController());
             self::$instance->registerController(new RuleController());
+            self::$instance->registerController(new SetupController());
 
             // Register controllers from plugins
             if (isset($PLUGIN_HOOKS[Hooks::API_CONTROLLERS])) {
@@ -621,7 +625,7 @@ EOT;
             }
         }
 
-        if ($CFG_GLPI['enable_hlapi']) {
+        if (Config::isHlApiEnabled()) {
             // OAuth will only be used if the API is enabled
             try {
                 $this->handleAuth($request);
@@ -644,18 +648,19 @@ EOT;
             $response = new Response(404);
         } else {
             $requires_auth = $matched_route->getRouteSecurityLevel() !== Route::SECURITY_NONE;
-            if ($CFG_GLPI['enable_hlapi']) {
+            if (Config::isHlApiEnabled()) {
                 $unauthenticated_response = new JSONResponse([
                     'title' => _x('api', 'You are not authenticated'),
                     'detail' => _x('api', 'The Authorization header is missing or invalid'),
                     'status' => 'ERROR_UNAUTHENTICATED',
                 ], 401);
             } else {
-                // Clear output buffers up to the level when the request was started
-                while (ob_get_level() > $current_output_buffer_level) {
-                    ob_end_clean();
-                }
-                return AbstractController::getAccessDeniedErrorResponse('The High-Level API is disabled');
+                // Remove all authentication middlewares except InternalAuthMiddleware if it is present
+                // If HL API is disabled, only internal requests should be allowed as they are used for features like Webhooks rather than user-initiated requests
+                $this->auth_middlewares = array_filter($this->auth_middlewares, static fn($middleware) => get_class($middleware['middleware']) === InternalAuthMiddleware::class);
+                // The internal auth is required to succeed here even for public endpoints because the HL API is disabled
+                $requires_auth = true;
+                $unauthenticated_response = AbstractController::getAccessDeniedErrorResponse('The High-Level API is disabled');
             }
             $middleware_input = new MiddlewareInput($request, $matched_route, $unauthenticated_response);
             // Do auth middlewares now even if auth isn't required so session data *could* be used like the theme for doc endpoints.
