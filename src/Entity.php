@@ -756,6 +756,14 @@ class Entity extends CommonTreeDropdown implements LinkableToTilesInterface, Pro
         $_SESSION['glpiactiveentities_string'] .= ",'" . $this->fields['id'] . "'";
         // Root entity cannot be deleted, so if we added an entity this means GLPI is now multi-entity
         $_SESSION['glpi_multientitiesmode'] = 1;
+        // Add the new entity to the profile's entities list to ensure Session::shouldReloadActiveEntities()
+        // doesn't trigger a reload that would remove the newly added entity from the session
+        if (isset($_SESSION['glpiactiveprofile']['entities'])) {
+            $_SESSION['glpiactiveprofile']['entities'][] = [
+                'id' => $this->fields['id'],
+                'is_recursive' => 0,
+            ];
+        }
     }
 
     public function post_updateItem($history = true)
