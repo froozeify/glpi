@@ -37,12 +37,21 @@ namespace Glpi\Tools\Command;
 ini_set('memory_limit', -1); // This is required due to high memory usage when extracting for core.
 
 use RecursiveDirectoryIterator;
+use RecursiveFilterIterator;
 use RecursiveIteratorIterator;
+use SplFileInfo;
 use Symfony\Component\Console\Command\Command;
-use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Output\OutputInterface;
 use Symfony\Component\Process\Process;
+use Twig\Cache\CacheInterface;
+use Twig\Cache\FilesystemCache;
+use Twig\Environment;
+use Twig\Loader\FilesystemLoader;
+use Twig\Loader\LoaderInterface;
+use Twig\TwigFilter;
+use Twig\TwigFunction;
+use Twig\TwigTest;
 
 final class ExtractLocalesCommand extends AbstractCommand
 {
@@ -130,19 +139,12 @@ final class ExtractLocalesCommand extends AbstractCommand
             mkdir($temp_twig_dir . '/templates', 0o777, true);
 
             $this->io->writeln("<question>Compiling twig templates into php files</question>");
-            // Using internal command to compile templates
-            $compile_cmd = $this->getApplication()->find('tools:compile_twig_templates');
-            $options = [
-                'templates-directory' => $working_dir . '/templates',
-                'output-directory'    => $temp_twig_dir . '/templates',
-                '--quiet' => true,
-            ];
-            if ($this->isPluginCommand()) {
-                $options['--plugin'] = $this->getPluginName();
-            }
-
-            $compile_input = new ArrayInput($options);
-            $compile_cmd->run($compile_input, $this->output);
+            $root_path = $this->isPluginCommand() ? $this->getPluginDirectory() : dirname($working_dir . '/templates');
+            $this->compileTwigTemplates(
+                $working_dir . '/templates',
+                $temp_twig_dir . '/templates',
+                $root_path
+            );
 
             $this->io->writeln("<question>Extracting translations from files</question>");
             $twig_files = $this->getFiles($temp_twig_dir, 'twig');
@@ -339,5 +341,136 @@ final class ExtractLocalesCommand extends AbstractCommand
         }
 
         return $process;
+    }
+
+    /**
+     * Compile Twig templates into PHP files for locale extraction.
+     */
+    private function compileTwigTemplates(string $templates_dir, string $output_dir, string $root_path): void
+    {
+        $loader = new FilesystemLoader($templates_dir, $root_path);
+        $twig = $this->getMockedTwigEnvironment($loader);
+        $twig->setCache($this->getTwigCacheHandler($output_dir));
+
+        $files = $this->getTwigTemplateFiles($templates_dir);
+
+        $progress_bar = $this->io->createProgressBar(count($files));
+        foreach ($files as $file) {
+            $twig->load($file);
+            $progress_bar->advance();
+        }
+        $progress_bar->finish();
+
+        $this->io->newLine(2);
+    }
+
+    /**
+     * Return template files from a directory.
+     *
+     * @return string[]
+     */
+    private function getTwigTemplateFiles(string $directory): array
+    {
+        $directory = realpath($directory);
+
+        if (!is_dir($directory) || !is_readable($directory)) {
+            throw new \RuntimeException(
+                sprintf('Unable to read directory "%s"', $directory)
+            );
+        }
+
+        $dir_iterator = new RecursiveDirectoryIterator($directory);
+
+        $filter_iterator = new class ($dir_iterator) extends RecursiveFilterIterator {
+            public function accept(): bool
+            {
+                /** @var SplFileInfo $this */
+                if ($this->isFile() && !preg_match('/^twig$/', $this->getExtension())) {
+                    return false;
+                }
+                return true;
+            }
+        };
+
+        $recursive_iterator = new RecursiveIteratorIterator(
+            $filter_iterator,
+            RecursiveIteratorIterator::SELF_FIRST
+        );
+
+        $files = [];
+
+        /** @var SplFileInfo $file */
+        foreach ($recursive_iterator as $file) {
+            if (!$file->isFile()) {
+                continue;
+            }
+
+            $files[] = preg_replace(
+                '/^' . preg_quote($directory . DIRECTORY_SEPARATOR, '/') . '/',
+                '',
+                $file->getRealPath()
+            );
+        }
+
+        return $files;
+    }
+
+    /**
+     * Return a mocked Twig environment.
+     * This mocked environment will prevent exceptions to be thrown when custom
+     * functions, filters or tests are used in templates.
+     */
+    private function getMockedTwigEnvironment(LoaderInterface $loader): Environment
+    {
+        return new class ($loader) extends Environment {
+            public function getFunction(string $name): ?TwigFunction
+            {
+                if (in_array($name, ['__', '_n', '_x', '_nx'], true)) {
+                    // Return a function that has its own name as callback
+                    // for translation functions, so Twig will generate code following this pattern:
+                    // $name($parameter, ...)`, e.g. `__('str')` or `_n('str', 'strs', 5)`.
+                    return new TwigFunction($name, $name);
+                }
+                return parent::getFunction($name) ?? new TwigFunction($name, function () {});
+            }
+
+            public function getFilter(string $name): ?TwigFilter
+            {
+                return parent::getFilter($name) ?? new TwigFilter($name, function () {});
+            }
+
+            public function getTest(string $name): ?TwigTest
+            {
+                if (in_array($name, ['divisible', 'same'])) {
+                    // `same as` and `divisible by` will be search in 2 times.
+                    // First check will be done on first word, should return `null` to
+                    // trigger second search that will be done on full name.
+                    return null;
+                }
+                return parent::getTest($name) ?? new TwigTest($name, function () {});
+            }
+        };
+    }
+
+    /**
+     * Return a custom Twig cache handler.
+     * This handler is useful to be able to preserve filenames of compiled files.
+     */
+    private function getTwigCacheHandler(string $directory): CacheInterface
+    {
+        return new class ($directory) extends FilesystemCache {
+            private string $directory;
+
+            public function __construct(string $directory, int $options = 0)
+            {
+                $this->directory = rtrim($directory, DIRECTORY_SEPARATOR) . DIRECTORY_SEPARATOR;
+                parent::__construct($directory, $options);
+            }
+
+            public function generateKey(string $name, string $className): string
+            {
+                return $this->directory . $name;
+            }
+        };
     }
 }
