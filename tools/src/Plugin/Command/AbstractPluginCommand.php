@@ -35,6 +35,7 @@
 namespace Glpi\Tools\Plugin\Command;
 
 use Glpi\Tools\Command\AbstractCommand;
+use Override;
 use Symfony\Component\Console\Exception\InvalidOptionException;
 use Symfony\Component\Console\Exception\RuntimeException;
 use Symfony\Component\Console\Input\InputInterface;
@@ -46,7 +47,11 @@ use Symfony\Component\Console\Output\OutputInterface;
  */
 abstract class AbstractPluginCommand extends AbstractCommand
 {
-    protected const REQUIRE_PLUGIN_OPTION = true;
+    #[Override]
+    protected function isRequiringPluginOption(): bool
+    {
+        return true;
+    }
 
     protected function initialize(InputInterface $input, OutputInterface $output): void
     {

@@ -46,7 +46,11 @@ use Symfony\Component\Process\Process;
 
 final class ExtractLocalesCommand extends AbstractCommand
 {
-    protected const ALLOW_PLUGIN_OPTION = true;
+    #[Override]
+    protected function isPluginOptionAvailable(): bool
+    {
+        return true;
+    }
 
     protected function configure(): void
     {

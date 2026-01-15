@@ -46,12 +46,6 @@ use Symfony\Component\Console\Style\SymfonyStyle;
  */
 abstract class AbstractCommand extends Command
 {
-    /** @var bool Declare the command has supporting plugging. */
-    protected const ALLOW_PLUGIN_OPTION = false;
-
-    /** @var bool Declare the command supporting plugging and require it to be set. */
-    protected const REQUIRE_PLUGIN_OPTION = false;
-
     protected InputInterface $input;
     protected OutputInterface $output;
     protected SymfonyStyle $io;
@@ -62,6 +56,10 @@ abstract class AbstractCommand extends Command
         $this->input = $input;
         $this->output = $output;
         $this->io = new SymfonyStyle($input, $output);
+
+        if ($this->isRequiringPluginOption() && $input->getOption('plugin') === null) {
+            throw new \RuntimeException('The "--plugin" option is required for this command.');
+        }
     }
 
     #[Override]
@@ -69,18 +67,11 @@ abstract class AbstractCommand extends Command
     {
         parent::configure();
 
-        if (static::REQUIRE_PLUGIN_OPTION) {
+        if ($this->isRequiringPluginOption() || $this->isPluginOptionAvailable()) {
             $this->addOption(
                 'plugin',
                 'p',
                 InputOption::VALUE_REQUIRED,
-                'Plugin name (required)'
-            );
-        } elseif (static::ALLOW_PLUGIN_OPTION) {
-            $this->addOption(
-                'plugin',
-                'p',
-                InputOption::VALUE_OPTIONAL,
                 'Plugin name'
             );
         }
@@ -104,5 +95,23 @@ abstract class AbstractCommand extends Command
         $root_dir = dirname(__DIR__, 3);
         $plugin_name = $this->getPluginName();
         return $root_dir . '/plugins/' . $plugin_name;
+    }
+
+    /**
+     * Declare the command has supporting or not --plugin.
+     * @return bool
+     */
+    protected function isPluginOptionAvailable(): bool
+    {
+        return false;
+    }
+
+    /**
+     * Declare the command supporting plugin and require it to be set.
+     * @return bool
+     */
+    protected function isRequiringPluginOption(): bool
+    {
+        return false;
     }
 }

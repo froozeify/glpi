@@ -47,7 +47,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class LicenceHeadersCheckCommand extends AbstractCommand
 {
-    protected const ALLOW_PLUGIN_OPTION = true;
 
     /**
      * Result code returned when some headers are missing or are outdated.
@@ -69,6 +68,12 @@ final class LicenceHeadersCheckCommand extends AbstractCommand
      * @var array|null
      */
     private ?array $header_lines = null;
+
+    #[Override]
+    protected function isPluginOptionAvailable(): bool
+    {
+        return true;
+    }
 
     #[Override]
     protected function configure(): void

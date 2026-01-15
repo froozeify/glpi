@@ -55,7 +55,11 @@ use Twig\TwigTest;
 
 final class CompileTwigTemplatesCommand extends AbstractCommand
 {
-    protected const ALLOW_PLUGIN_OPTION = true;
+    #[Override]
+    protected function isPluginOptionAvailable(): bool
+    {
+        return true;
+    }
 
     #[Override]
     protected function configure(): void
