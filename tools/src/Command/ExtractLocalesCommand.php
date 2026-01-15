@@ -34,8 +34,6 @@
 
 namespace Glpi\Tools\Command;
 
-ini_set('memory_limit', -1); // This is required due to high memory usage when extracting for core.
-
 use RecursiveDirectoryIterator;
 use RecursiveFilterIterator;
 use RecursiveIteratorIterator;
@@ -71,6 +69,8 @@ final class ExtractLocalesCommand extends AbstractCommand
     #[Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
+        ini_set('memory_limit', -1); // This is required due to high memory usage when extracting for core.
+
         if ($this->isPluginCommand()) {
             $working_dir = $this->getPluginDirectory();
         } else {
