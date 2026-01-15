@@ -36,6 +36,7 @@ namespace tests\functional\Tools\Command;
 
 use Glpi\Tests\GLPITestCase;
 use Glpi\Tools\Command\LicenceHeadersCheckCommand;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Tester\CommandTester;
 
 class LicenceHeadersCheckCommandTest extends GLPITestCase
@@ -136,7 +137,7 @@ PHP;
 
         $output = $tester->getDisplay();
         $this->assertMatchesRegularExpression('/\[ERROR\] Found 1 file without header\. Use --fix option to fix these\s+files\./', $output);
-        $this->assertEquals(LicenceHeadersCheckCommand::ERROR_FOUND_MISSING_OR_OUTDATED, $tester->getStatusCode());
+        $this->assertEquals(Command::FAILURE, $tester->getStatusCode());
     }
 
     public function testSuccess(): void

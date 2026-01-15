@@ -113,7 +113,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
             mkdir($this->dist_dir, 0o777, true);
         }
 
-        $this->plugin_name = $this->guessPluginName();
+        $this->plugin_name = $this->getPluginName();
 
         if ($input->getOption('compile-mo')) {
             $this->compileMo($plugin_dir);

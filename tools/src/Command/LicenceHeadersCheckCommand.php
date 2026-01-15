@@ -47,21 +47,6 @@ use Symfony\Component\Console\Output\OutputInterface;
 
 final class LicenceHeadersCheckCommand extends AbstractCommand
 {
-
-    /**
-     * Result code returned when some headers are missing or are outdated.
-     *
-     * @var int
-     */
-    public const ERROR_FOUND_MISSING_OR_OUTDATED = 1;
-
-    /**
-     * Result code returned when some files cannot be updated.
-     *
-     * @var int
-     */
-    public const ERROR_UNABLE_TO_FIX_FILES = 2;
-
     /**
      * Header lines.
      *
@@ -371,7 +356,7 @@ final class LicenceHeadersCheckCommand extends AbstractCommand
                 $build_msg($missing_found, $outdated_found)
             );
             $this->io->error($msg);
-            return self::ERROR_FOUND_MISSING_OR_OUTDATED;
+            return self::FAILURE;
         }
 
         $msg = sprintf(
@@ -385,7 +370,7 @@ final class LicenceHeadersCheckCommand extends AbstractCommand
 
         if ($missing_errors > 0 || $outdated_errors > 0) {
             $this->io->error(sprintf('%s file(s) cannot be updated.', $missing_errors + $outdated_errors));
-            return self::ERROR_UNABLE_TO_FIX_FILES;
+            return self::FAILURE;
         }
 
         return 0; // Success
