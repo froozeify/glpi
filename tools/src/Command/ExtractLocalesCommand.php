@@ -95,15 +95,8 @@ final class ExtractLocalesCommand extends AbstractCommand
         ];
 
         // Compute POT filename
-        if (file_exists($working_dir . '/setup.php')) {
-            // setup.php found: it's a plugin.
-            $content = file_get_contents($working_dir . '/setup.php');
-            if (preg_match('/PLUGIN_(.*)_VERSION/', $content, $matches)) {
-                $name = $matches[1];
-            } else {
-                $name = 'UNKNOWN';
-            }
-
+        if ($this->isPluginCommand()) {
+            $name = $this->getPluginName();
             $exclude_regex = '/^\.\/(\..*|(libs?|node_modules|tests|vendor)\/).*/';
 
             // Only strings with domain specified are extracted
@@ -117,7 +110,7 @@ final class ExtractLocalesCommand extends AbstractCommand
         } else {
             // core
             $name = 'GLPI';
-            $exclude_regex = '/^\.\/(\..*|(config|files|lib|marketplace|node_modules|plugins|phpunit|public|tests|tools|vendor)\/).*/';
+            $exclude_regex = '/^\.\/(\..*|(config|files|lib|marketplace|node_modules|plugins|public|tests|tools|vendor)\/).*/';
         }
 
         $potfile = $working_dir . '/locales/' . strtolower($name) . '.pot';
