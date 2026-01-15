@@ -10,8 +10,7 @@ on:
 jobs:
   build-main:
     name: "Build main branch"
-    if: ${{ github.repository == 'glpi-project/glpi' }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
+    uses: "froozeify/GLPI_docker-images/.github/workflows/glpi.yml@main"
     secrets: inherit
     with:
       push: true
@@ -20,8 +19,7 @@ jobs:
 
   build-11:
     name: "Build 11.0/bugfixes branch"
-    if: ${{ github.repository == 'glpi-project/glpi' }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
+    uses: "froozeify/GLPI_docker-images/.github/workflows/glpi.yml@main"
     secrets: inherit
     with:
       push: true
@@ -30,8 +28,7 @@ jobs:
 
   build-10:
     name: "Build 10.0/bugfixes branch"
-    if: ${{ github.repository == 'glpi-project/glpi' }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
+    uses: "froozeify/GLPI_docker-images/.github/workflows/glpi.yml@main"
     secrets: inherit
     with:
       push: true
