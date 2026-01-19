@@ -34,8 +34,6 @@
 
 namespace Glpi\Tools\Plugin\Command;
 
-use GuzzleHttp\Client;
-use GuzzleHttp\Exception\ClientException;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
@@ -51,7 +49,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
     private const SCRIPT_VERSION = '2.0.0';
 
     private string $dist_dir;
-    private string $gh_orga = 'pluginsGLPI';
     private string $plugin_name = '';
     private string $commit = '';
 
@@ -86,11 +83,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
             self::SCRIPT_VERSION
         ));
 
-        $this->addOption('release', 'r', InputOption::VALUE_REQUIRED, 'Version to release');
-        $this->addOption('check-only', 'C', InputOption::VALUE_NONE, 'Only do check, does not release anything');
-        $this->addOption('dont-check', 'd', InputOption::VALUE_NONE, 'DO NOT check version');
-        $this->addOption('commit', 'c', InputOption::VALUE_REQUIRED, 'Specify commit to archive (-r required)');
-        $this->addOption('extra', 'e', InputOption::VALUE_REQUIRED, 'Extra version informations (-c required)');
+        $this->addOption('extra', 'e', InputOption::VALUE_REQUIRED, 'Extra version informations');
         $this->addOption('compile-mo', 'm', InputOption::VALUE_NONE, 'Compile MO files from PO files');
         $this->addOption('assume-yes', 'Y', InputOption::VALUE_NONE, 'Assume YES to all questions');
         $this->addOption('force', 'f', InputOption::VALUE_NONE, 'Force rebuild even if release exists');
@@ -118,67 +111,17 @@ final class PluginReleaseCommand extends AbstractPluginCommand
             return Command::SUCCESS;
         }
 
-        // Release or Check-Only
-        $release_version = $input->getOption('release');
-        $input_commit = $input->getOption('commit');
+        // Release
+        $release_version = $this->getPluginVersion();
         $extra = $input->getOption('extra');
-
-        if (($extra || $input_commit) && (!$extra || !$input_commit || !$release_version)) {
-            $this->io->error('You have to specify --release, --commit and --extra all together');
-            return Command::FAILURE;
-        }
-
-        if ($release_version) {
-            if (!$input->getOption('dont-check')) {
-                if (!$this->validVersion($release_version)) {
-                    $this->io->error(sprintf('%s is not a valid version number!', $release_version));
-                    return Command::FAILURE;
-                }
-
-                if (!$this->checkVersion($release_version)) {
-                    return Command::FAILURE;
-                }
-            }
-
-            if ($input_commit) {
-                if (!$this->validCommit($input_commit)) {
-                    $this->io->error(sprintf('Invalid commit ref %s', $input_commit));
-                    return Command::FAILURE;
-                }
-            } elseif (!$this->isExistingVersion($release_version)) {
-                $this->io->error(sprintf('Tag %s does not exist!', $release_version));
-                return Command::FAILURE;
-            }
-        } else {
-            // If no release version specified, use latest version
-            $release_version = $this->getLatestVersion();
-            if (!$release_version) {
-                $this->io->error('No tags found in the repository.');
-                return Command::FAILURE;
-            }
-
-            if ($input->getOption('force')) {
-                // Force mode, proceed directly
-            } else {
-                if (!$this->io->confirm(sprintf('Do you want to build version %s?', $release_version), true)) {
-                    return Command::SUCCESS;
-                }
-            }
-        }
 
         $this->io->title("Releasing plugin {$this->plugin_name}");
 
-        if ($input->getOption('check-only')) {
-            $this->io->note('*** Entering *check-only* mode ***');
-            $this->io->success('Check-only mode finished.');
-            return Command::SUCCESS;
-        }
-
         // Prepare Archive Name
         $archive_name = "glpi-{$this->plugin_name}-{$release_version}";
-        if ($input_commit && $extra) {
+        if ($extra) {
             $date = date('Ymd');
-            $archive_name = "glpi-{$this->plugin_name}-{$release_version}-{$extra}-{$date}-{$this->commit}";
+            $archive_name = "glpi-{$this->plugin_name}-{$release_version}-{$extra}-{$date}";
         }
 
         $tarball = $this->dist_dir . DIRECTORY_SEPARATOR . $archive_name . '.tar.bz2';
@@ -217,6 +160,34 @@ final class PluginReleaseCommand extends AbstractPluginCommand
     {
         $parts = $this->getNumericVersion($ver);
         return implode('.', $parts) === $ver;
+    }
+
+    private function getPluginVersion(): string
+    {
+        $plugin_dir = $this->getPluginDirectory();
+        $setup_file = $plugin_dir . '/setup.php';
+
+        if ($this->output->isVerbose()) {
+            $this->io->text("Extracting plugin version from $setup_file");
+        }
+
+        if (!file_exists($setup_file)) {
+            throw new \RuntimeException("Setup file not found: $setup_file");
+        }
+
+        require_once $setup_file;
+
+        $function_name = 'plugin_version_' . $this->plugin_name;
+        if (!function_exists($function_name)) {
+            throw new \RuntimeException("Plugin version function not found: $function_name");
+        }
+
+        $plugin_info = $function_name();
+        if (!isset($plugin_info['version'])) {
+            throw new \RuntimeException("Version field not found in $function_name()");
+        }
+
+        return $plugin_info['version'];
     }
 
     private function checkVersion(string $build_ver): bool
@@ -315,45 +286,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         }
 
         return true;
-    }
-
-    private function isExistingVersion(string $ver): bool
-    {
-        $tags = $this->getGitTags();
-        return in_array($ver, $tags);
-    }
-
-    protected function getGitTags(): array
-    {
-        $plugin_dir = $this->getPluginDirectory();
-        $process = new Process(['git', 'tag'], $plugin_dir);
-        $process->run();
-        if (!$process->isSuccessful()) {
-            return [];
-        }
-        $tags = explode("\n", trim($process->getOutput()));
-        return array_filter($tags);
-    }
-
-    private function getLatestVersion(): ?string
-    {
-        $tags = $this->getGitTags();
-        if ($tags === []) {
-            return null;
-        }
-
-        // Sort versions
-        usort($tags, function ($a, $b) {
-            if (!$this->validVersion($a)) {
-                return -1;
-            }
-            if (!$this->validVersion($b)) {
-                return 1;
-            }
-            return version_compare($a, $b);
-        });
-
-        return end($tags) ?: null;
     }
 
     private function build(string $ver, string $ref, string $dest): void
