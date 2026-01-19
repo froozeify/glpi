@@ -95,22 +95,33 @@ if (isset($_SERVER['argv']) && ($_SERVER['argv'][1] ?? '') === 'locales:compile'
 
 function compileLocales(): int
 {
-   chdir(dirname(__FILE__, 2));
+   $base_dir = dirname(__FILE__, 2);
+   $locales_dir = $base_dir . '/locales';
 
-   $exit_code = 0;
+   echo "Compiling MO files...\n";
 
-   $po_files = preg_grep('/\.po$/', scandir('./locales'));
-   echo "Compiling MO files...";
-   foreach ($po_files as $po_file) {
-      $mo_file = preg_replace('/\.po$/', '.mo', $po_file);
-      passthru("cd ./locales && msgfmt -f -o {$mo_file} {$po_file}", $exit_code);
-      if ($exit_code > 0) {
-         exit($exit_code);
-      }
+   try {
+      // Include the LocaleCompiler class file directly (Symfony not available yet)
+      require_once $base_dir . '/tools/src/LocaleCompiler.php';
+
+      \Glpi\Tools\LocaleCompiler::compileLocales(
+         $locales_dir,
+         function (string $message, bool $is_error) {
+            if ($is_error) {
+               echo " [ERROR] $message\n";
+            } else {
+               echo " $message\n";
+            }
+         }
+      );
+   } catch (\RuntimeException $e) {
+      echo " [ERROR] " . $e->getMessage() . "\n";
+      return 1;
    }
-   echo " Done.\n";
 
-   return $exit_code;
+   echo "Done.\n";
+
+   return 0;
 }
 
 // Check the resources state before trying to instanciate the Kernel.

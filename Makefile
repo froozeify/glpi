@@ -97,8 +97,8 @@ locales-extract: ## Extract locales
 	@$(CONSOLE) tools:extract_locales
 .PHONY: locales-extract
 
-locales-compile: c=locales:compile ## Compile locales
-locales-compile: console
+locales-compile:
+	@$(CONSOLE) tools:compile_locales
 .PHONY: locales-compile
 
 cc: c=cache:clear ## Clear the cache

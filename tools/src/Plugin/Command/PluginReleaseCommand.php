@@ -37,6 +37,7 @@ namespace Glpi\Tools\Plugin\Command;
 use GuzzleHttp\Client;
 use GuzzleHttp\Exception\ClientException;
 use Symfony\Component\Console\Command\Command;
+use Symfony\Component\Console\Input\ArrayInput;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\ConsoleSectionOutput;
@@ -116,7 +117,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         $this->plugin_name = $this->getPluginName();
 
         if ($input->getOption('compile-mo')) {
-            $this->compileMo($plugin_dir);
+            $this->compileMo();
             return Command::SUCCESS;
         }
 
@@ -215,58 +216,14 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         return Command::SUCCESS;
     }
 
-    private function guessPluginName(): string
+    private function compileMo(): void
     {
-        $plugin_dir = $this->getPluginDirectory();
-        $name = null;
-        $setup_file = $plugin_dir . '/setup.php';
-        if (file_exists($setup_file)) {
-            $content = file_get_contents($setup_file);
-            if (preg_match("/PLUGIN_(.+)_VERSION/", $content, $matches)) {
-                $name = strtolower($matches[1]);
-            }
-        }
-        if (!$name) {
-            $name = basename($plugin_dir);
-        }
-        return $name;
-    }
-
-    private function compileMo(string $dir): void
-    {
-        $locales_dir = $dir . '/locales';
-        $this->io->section("Compiling MO files");
-        if ($this->output->isVerbose()) {
-            $this->output->writeln(" <question>Locales dir: $locales_dir</question>");
-        }
-
-        if (is_dir($locales_dir)) {
-            $files = glob($locales_dir . '/*.po');
-            /** @var ConsoleSectionOutput $section */
-            $section = $this->output->section();
-
-            // Check msgfmt
-            $process = new Process(['msgfmt', '--version']);
-            $process->run();
-            if (!$process->isSuccessful()) {
-                throw new \RuntimeException('msgfmt not found!');
-            }
-
-            $section_messages = [];
-            foreach ($files as $k => $file) {
-                $mo = str_replace('.po', '.mo', $file);
-                $section->writeln(" Compiling " . basename($file) . "...");
-                $proc = new Process(['msgfmt', $file, '-o', $mo]);
-                $proc->run();
-                if (!$proc->isSuccessful()) {
-                    $section_messages[$k] = " <error>Failed to compile $file</error>";
-                } else {
-                    $section_messages[$k] = " <info>Compiled " . basename($file) . "</info>";
-                }
-                $section->overwrite(implode("\n", $section_messages)); // Use for dynamic message display
-            }
-            $this->io->newLine();
-        }
+        $input = new ArrayInput([
+            'command'  => 'tools:compile_locales',
+            '--plugin' => $this->getPluginName(),
+        ]);
+        $input->setInteractive(false);
+        $this->getApplication()->doRun($input, $this->output);
     }
 
     private function getNumericVersion(string $ver): array
@@ -543,10 +500,8 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         $untar->mustRun();
         unlink($temp_tar);
 
-        $build_dir = $src_dir . '/' . $this->plugin_name;
-
         // Composer
-        if (file_exists($build_dir . '/composer.json')) {
+        if (file_exists($plugin_dir . '/composer.json')) {
             /** @var ConsoleSectionOutput $section */
             $section = $this->output->section();
 
@@ -556,47 +511,47 @@ final class PluginReleaseCommand extends AbstractPluginCommand
                 $c_cmd[] = '--quiet';
             }
 
-            $proc = new Process($c_cmd, $build_dir);
+            $proc = new Process($c_cmd, $plugin_dir);
             $proc->setTimeout(300);
             $proc->mustRun();
 
             // Cleanup vendors
-            $this->cleanupVendor($build_dir . '/vendor');
+            $this->cleanupVendor($plugin_dir . '/vendor');
 
             // Dump autoload
-            $proc = new Process(['composer', 'dump-autoload', '-o', '--no-dev'], $build_dir);
+            $proc = new Process(['composer', 'dump-autoload', '-o', '--no-dev'], $plugin_dir);
             $proc->mustRun();
 
             // Remove composer.lock
-            if (file_exists($build_dir . '/composer.lock')) {
-                unlink($build_dir . '/composer.lock');
+            if (file_exists($plugin_dir . '/composer.lock')) {
+                unlink($plugin_dir . '/composer.lock');
             }
             $section->overwrite("<info> Composer dependencies installed.</info>");
         }
 
         // NPM
-        if (file_exists($build_dir . '/package.json')) {
+        if (file_exists($plugin_dir . '/package.json')) {
             /** @var ConsoleSectionOutput $section */
             $section = $this->output->section();
 
             $section->writeln(" Installing npm dependencies...");
             $n_cmd = ['npm', 'install'];
-            $proc = new Process($n_cmd, $build_dir);
+            $proc = new Process($n_cmd, $plugin_dir);
             $proc->setTimeout(600);
             $proc->mustRun();
 
             // Remove node_modules (assume npm install triggers postinstall build)
-            $fs->remove($build_dir . '/node_modules');
+            $fs->remove($plugin_dir . '/node_modules');
 
             // Remove package-lock.json
-            if (file_exists($build_dir . '/package-lock.json')) {
-                unlink($build_dir . '/package-lock.json');
+            if (file_exists($plugin_dir . '/package-lock.json')) {
+                unlink($plugin_dir . '/package-lock.json');
             }
             $section->overwrite("<info> npm dependencies installed.</info>");
         }
 
         // Compile MO
-        $this->compileMo($build_dir);
+        $this->compileMo();
 
         // Compress to bz2
         $this->io->section("Generating the archive");
