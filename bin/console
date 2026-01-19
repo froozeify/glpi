@@ -72,6 +72,11 @@ if (isset($_SERVER['argv']) && ['dependencies', 'install'] === array_slice($_SER
       exit($exit_code);
    }
 
+   passthru('bin/console tools:compile_locales --allow-superuser',  $exit_code);
+   if ($exit_code > 0) {
+      exit($exit_code);
+   }
+
    $npm_command = 'npm install --no-save';
    passthru($npm_command, $exit_code);
    if ($exit_code > 0) {
@@ -79,11 +84,6 @@ if (isset($_SERVER['argv']) && ['dependencies', 'install'] === array_slice($_SER
    }
 
    passthru('npm run-script build', $exit_code);
-   if ($exit_code > 0) {
-      exit($exit_code);
-   }
-
-   passthru('bin/console tools:compile_locales --allow-superuser',  $exit_code);
    if ($exit_code > 0) {
       exit($exit_code);
    }

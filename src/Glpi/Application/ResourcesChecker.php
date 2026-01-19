@@ -146,7 +146,7 @@ final class ResourcesChecker
      */
     private function shouldLocalesBeChecked(): bool
     {
-        return (PHP_SAPI === 'cli' && ($_SERVER['argv'][1] ?? '') === 'tools:compile_locales') === false;
+        return (PHP_SAPI === 'cli' && \str_starts_with($_SERVER['argv'][1] ?? '', 'tools:')) === false;
     }
 
     /**
