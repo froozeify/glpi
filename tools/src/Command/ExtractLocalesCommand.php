@@ -268,7 +268,7 @@ final class ExtractLocalesCommand extends AbstractCommand
             ],
             null,
             true,
-             // Environment variables for this command (LANG=C)
+            // Environment variables for this command (LANG=C)
             ['LANG' => 'C']
         );
 
@@ -285,7 +285,7 @@ final class ExtractLocalesCommand extends AbstractCommand
         $iterator = new RecursiveIteratorIterator($dir_iterator);
 
         $filter = new \CallbackFilterIterator($iterator, function ($file) use ($directory, $extension, $exclude_regex) {
-            /** @var \SplFileInfo $file */
+            /** @var SplFileInfo $file */
             if (!$file->isFile() || $file->getExtension() !== $extension) {
                 return false;
             }
