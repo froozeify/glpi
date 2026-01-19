@@ -87,7 +87,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         ));
 
         $this->addOption('release', 'r', InputOption::VALUE_REQUIRED, 'Version to release');
-        $this->addOption('nogithub', 'g', InputOption::VALUE_NONE, 'DO NOT Create github draft release');
         $this->addOption('check-only', 'C', InputOption::VALUE_NONE, 'Only do check, does not release anything');
         $this->addOption('dont-check', 'd', InputOption::VALUE_NONE, 'DO NOT check version');
         $this->addOption('commit', 'c', InputOption::VALUE_REQUIRED, 'Specify commit to archive (-r required)');
@@ -199,11 +198,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         // Sign
         if (!$input->getOption('nosign')) {
             $this->sign($tarball);
-        }
-
-        // GitHub Release
-        if (!$input->getOption('nogithub')) {
-            $this->createGithubRelease($release_version, $input_commit, $tarball);
         }
 
         return Command::SUCCESS;
@@ -566,80 +560,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
             $this->io->error("Signing failed: " . $proc->getErrorOutput());
         } else {
             $this->io->success("Signed.");
-        }
-    }
-
-    private function createGithubRelease(string $ver, ?string $commit, string $archive): void
-    {
-        $plugin_dir = $this->getPluginDirectory();
-        $token_file = $plugin_dir . '/.gh_token';
-        if (!file_exists($token_file)) {
-            $this->io->error(".gh_token not found in plugin directory. Cannot release to GitHub.");
-            return;
-        }
-        $token = trim(file_get_contents($token_file));
-
-        $client = new Client([
-            'base_uri' => 'https://api.github.com/',
-            'headers'  => [
-                'Authorization' => 'token ' . $token,
-                'Accept'        => 'application/vnd.github.v3+json',
-            ],
-        ]);
-
-        $repo = $this->gh_orga . '/' . $this->plugin_name;
-
-        // Check if release exists
-        $release = null;
-        try {
-            $resp = $client->get("repos/$repo/releases/tags/$ver");
-            $release = json_decode($resp->getBody(), true);
-            $this->io->text("Release $ver already exists. ID: " . $release['id']);
-        } catch (\Exception $e) {
-            // Not found - will create
-        }
-
-        if (!$release) {
-            $this->io->text("Creating release $ver...");
-            try {
-                $resp = $client->post("repos/$repo/releases", [
-                    'json' => [
-                        'tag_name'         => $ver,
-                        'target_commitish' => $commit ?: '',
-                        'name'             => "GLPI {$this->plugin_name} $ver",
-                        'body'             => 'Automated release from release script',
-                        'draft'            => true,
-                        'prerelease'       => (bool) $commit,
-                    ],
-                ]);
-                $release = json_decode($resp->getBody(), true);
-            } catch (\Exception $e) {
-                $this->io->error("Failed to create release: " . $e->getMessage());
-                if ($e instanceof ClientException) {
-                    $this->io->error($e->getResponse()->getBody()->getContents());
-                }
-                return;
-            }
-        }
-
-        // Upload Asset
-        if ($this->io->confirm("Upload archive $archive?", true)) {
-            $asset_name = basename($archive);
-            $upload_url = str_replace('{?name,label}', '', $release['upload_url']);
-            $this->io->text("Uploading $asset_name to $upload_url...");
-
-            try {
-                $client->post($upload_url, [
-                    'headers' => [
-                        'Content-Type' => 'application/octet-stream',
-                    ],
-                    'query'   => ['name' => $asset_name],
-                    'body'    => fopen($archive, 'r'),
-                ]);
-                $this->io->success("Asset uploaded.");
-            } catch (\Exception $e) {
-                $this->io->error("Failed to upload asset: " . $e->getMessage());
-            }
         }
     }
 }
