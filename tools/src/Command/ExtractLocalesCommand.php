@@ -131,7 +131,7 @@ final class ExtractLocalesCommand extends AbstractCommand
             $temp_twig_dir = sys_get_temp_dir() . '/glpi-locales-' . uniqid();
             mkdir($temp_twig_dir . '/templates', 0o777, true);
 
-            $this->io->writeln("<question>Compiling twig templates into php files</question>");
+            $this->io->writeln("<info>Compiling twig templates into php files</info>");
             $root_path = $this->isPluginCommand() ? $this->getDevPluginDirectory() : dirname($working_dir . '/templates');
             $this->compileTwigTemplates(
                 $working_dir . '/templates',
@@ -139,7 +139,7 @@ final class ExtractLocalesCommand extends AbstractCommand
                 $root_path
             );
 
-            $this->io->writeln("<question>Extracting translations from files</question>");
+            $this->io->writeln("<info>Extracting translations from files</info>");
             $twig_files = $this->getFiles($temp_twig_dir, 'twig');
             if (count($twig_files) > 0) {
                 $command = array_merge(
