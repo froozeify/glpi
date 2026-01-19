@@ -92,7 +92,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
     #[Override]
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
-        $plugin_dir = $this->getPluginDirectory();
+        $plugin_dir = $this->getDevPluginDirectory();
 
         if (!file_exists($plugin_dir . '/setup.php')) {
             $this->io->error('Current directory is not a valid GLPI plugin.');
@@ -164,7 +164,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
 
     private function getPluginVersion(): string
     {
-        $plugin_dir = $this->getPluginDirectory();
+        $plugin_dir = $this->getDevPluginDirectory();
         $setup_file = $plugin_dir . '/setup.php';
 
         if ($this->output->isVerbose()) {
@@ -192,7 +192,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
 
     private function checkVersion(string $build_ver): bool
     {
-        $plugin_dir = $this->getPluginDirectory();
+        $plugin_dir = $this->getDevPluginDirectory();
         $setup_file = $plugin_dir . '/setup.php';
 
         if ($this->output->isVerbose()) {
@@ -256,7 +256,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
 
     protected function validCommit(string $commit_ref): bool
     {
-        $plugin_dir = $this->getPluginDirectory();
+        $plugin_dir = $this->getDevPluginDirectory();
 
         $process = new Process(['git', 'rev-parse', '--verify', $commit_ref], $plugin_dir);
         $process->run();
@@ -290,7 +290,7 @@ final class PluginReleaseCommand extends AbstractPluginCommand
 
     private function build(string $ver, string $ref, string $dest): void
     {
-        $plugin_dir = $this->getPluginDirectory();
+        $plugin_dir = $this->getDevPluginDirectory();
         $this->io->section("Building glpi-{$this->plugin_name}-{$ver}");
 
         $type_str = ($ref !== $ver) ? 'Commit' : 'Tag';

@@ -102,7 +102,7 @@ final class LicenceHeadersCheckCommand extends AbstractCommand
         $project_dir = dirname(__DIR__, 3); // Root of GLPI
 
         if ($this->isPluginCommand()) {
-            $project_dir = $this->getPluginDirectory();
+            $project_dir = $this->getDevPluginDirectory();
             if (!is_dir($project_dir)) {
                 throw new \RuntimeException(sprintf('Plugin directory "%s" not found.', $project_dir));
             }

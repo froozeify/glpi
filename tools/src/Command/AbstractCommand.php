@@ -90,7 +90,7 @@ abstract class AbstractCommand extends Command
         return $this->input->getOption('plugin');
     }
 
-    protected function getPluginDirectory(): string
+    protected function getDevPluginDirectory(): string
     {
         $root_dir = dirname(__DIR__, 3);
         $plugin_name = $this->getPluginName();
