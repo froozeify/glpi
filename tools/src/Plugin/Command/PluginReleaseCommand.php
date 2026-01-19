@@ -92,7 +92,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         $this->addOption('commit', 'c', InputOption::VALUE_REQUIRED, 'Specify commit to archive (-r required)');
         $this->addOption('extra', 'e', InputOption::VALUE_REQUIRED, 'Extra version informations (-c required)');
         $this->addOption('compile-mo', 'm', InputOption::VALUE_NONE, 'Compile MO files from PO files');
-        $this->addOption('nosign', 'S', InputOption::VALUE_NONE, 'Do not sign release tarball');
         $this->addOption('assume-yes', 'Y', InputOption::VALUE_NONE, 'Assume YES to all questions');
         $this->addOption('force', 'f', InputOption::VALUE_NONE, 'Force rebuild even if release exists');
     }
@@ -194,11 +193,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         // Build
         $ref = $this->commit ?: $release_version;
         $this->build($release_version, $ref, $tarball);
-
-        // Sign
-        if (!$input->getOption('nosign')) {
-            $this->sign($tarball);
-        }
 
         return Command::SUCCESS;
     }
@@ -547,19 +541,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         $finder->files()->in($vendor_dir)->name('composer.*')->depth('> 0');
         foreach ($finder as $file) {
             $fs->remove($file->getPathname());
-        }
-    }
-
-    private function sign(string $archive): void
-    {
-        $this->io->text("Signing archive...");
-        $cmd = ['gpg', '--no-use-agent', '--detach-sign', '--armor', $archive];
-        $proc = new Process($cmd);
-        $proc->run();
-        if (!$proc->isSuccessful()) {
-            $this->io->error("Signing failed: " . $proc->getErrorOutput());
-        } else {
-            $this->io->success("Signed.");
         }
     }
 }
