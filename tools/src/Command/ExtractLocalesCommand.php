@@ -72,7 +72,7 @@ final class ExtractLocalesCommand extends AbstractCommand
         ini_set('memory_limit', -1); // This is required due to high memory usage when extracting for core.
 
         if ($this->isPluginCommand()) {
-            $working_dir = $this->getDevPluginDirectory();
+            $working_dir = $this->getPluginDirectory();
         } else {
             $working_dir = dirname(__DIR__, 3); // glpi
         }
@@ -132,7 +132,7 @@ final class ExtractLocalesCommand extends AbstractCommand
             mkdir($temp_twig_dir . '/templates', 0o777, true);
 
             $this->io->writeln("<info>Compiling twig templates into php files</info>");
-            $root_path = $this->isPluginCommand() ? $this->getDevPluginDirectory() : dirname($working_dir . '/templates');
+            $root_path = $this->isPluginCommand() ? $this->getPluginDirectory() : dirname($working_dir . '/templates');
             $this->compileTwigTemplates(
                 $working_dir . '/templates',
                 $temp_twig_dir . '/templates',

@@ -59,7 +59,7 @@ final class CompileLocalesCommand extends AbstractCommand
     protected function execute(InputInterface $input, OutputInterface $output): int
     {
         if ($this->isPluginCommand()) {
-            $working_dir = $this->getDevPluginDirectory();
+            $working_dir = $this->getPluginDirectory();
         } else {
             $working_dir = dirname(__DIR__, 3); // glpi
         }
