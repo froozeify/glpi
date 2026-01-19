@@ -61,7 +61,7 @@ final class ResourcesChecker
             echo 'Run "php bin/console dependencies install" in the glpi tree to fix this.' . PHP_EOL;
             exit(1); // @phpstan-ignore glpi.forbidExit (Script execution should be stopped to prevent further errors)
         }
-        if (!$this->areLocalesUpToDate()) {
+        if ($this->shouldLocalesBeChecked() && !$this->areLocalesUpToDate()) {
             echo 'Application locales have to be compiled.' . PHP_EOL;
             echo 'Run "php bin/console locales:compile" in the glpi tree to fix this.' . PHP_EOL;
             exit(1); // @phpstan-ignore glpi.forbidExit (Script execution should be stopped to prevent further errors)
@@ -139,6 +139,14 @@ final class ResourcesChecker
         }
 
         return true;
+    }
+
+    /**
+     * Avoid checker blocking itself when running `tools:compile_locales` command.
+     */
+    private function shouldLocalesBeChecked(): bool
+    {
+        return !(isset($_SERVER['argv']) && ($_SERVER['argv'][1] ?? '') === 'tools:compile_locales');
     }
 
     /**

@@ -50,6 +50,11 @@ if (isset($_SERVER['argv'])) {
       $chunks[0] = preg_replace('/^--/', '', $chunks[0]);
       $options[$chunks[0]] = (isset($chunks[1]) ? $chunks[1] : true);
    }
+
+   // Alias of previous command
+   if ($_SERVER['argv'][1] === 'locales:compile') {
+       $_SERVER['argv'][1] = 'tools:compile_locales';
+   }
 }
 
 //Handle specific dependencies update command that cannot be made upon symfony console
@@ -67,7 +72,7 @@ if (isset($_SERVER['argv']) && ['dependencies', 'install'] === array_slice($_SER
       exit($exit_code);
    }
 
-   $exit_code = compileLocales();
+   passthru('bin/console tools:compile_locales --allow-superuser',  $exit_code);
    if ($exit_code > 0) {
       exit($exit_code);
    }
@@ -84,44 +89,6 @@ if (isset($_SERVER['argv']) && ['dependencies', 'install'] === array_slice($_SER
    }
 
    exit($exit_code);
-}
-
-// Handle specific "locales:compile" command that cannot be made upon symfony console
-if (isset($_SERVER['argv']) && ($_SERVER['argv'][1] ?? '') === 'locales:compile') {
-   $exit_code = compileLocales();
-
-   exit($exit_code);
-}
-
-function compileLocales(): int
-{
-   $base_dir = dirname(__FILE__, 2);
-   $locales_dir = $base_dir . '/locales';
-
-   echo "Compiling MO files...\n";
-
-   try {
-      // Include the LocaleCompiler class file directly (Symfony not available yet)
-      require_once $base_dir . '/tools/src/LocaleCompiler.php';
-
-      \Glpi\Tools\LocaleCompiler::compileLocales(
-         $locales_dir,
-         function (string $message, bool $is_error) {
-            if ($is_error) {
-               echo " [ERROR] $message\n";
-            } else {
-               echo " $message\n";
-            }
-         }
-      );
-   } catch (\RuntimeException $e) {
-      echo " [ERROR] " . $e->getMessage() . "\n";
-      return 1;
-   }
-
-   echo "Done.\n";
-
-   return 0;
 }
 
 // Check the resources state before trying to instanciate the Kernel.

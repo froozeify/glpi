@@ -34,11 +34,10 @@
 
 namespace Glpi\Tools\Command;
 
-use Glpi\Tools\LocaleCompiler;
 use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
-use Symfony\Component\Console\Output\ConsoleSectionOutput;
 use Symfony\Component\Console\Output\OutputInterface;
+use Symfony\Component\Process\Process;
 
 final class CompileLocalesCommand extends AbstractCommand
 {
@@ -77,18 +76,34 @@ final class CompileLocalesCommand extends AbstractCommand
             $this->output->writeln(" <question>Locales dir: $locales_dir</question>");
         }
 
-        /** @var ConsoleSectionOutput $section */
-        $section = $this->output->section();
-        $section_messages = [];
+        if (!is_dir($locales_dir)) {
+            return;
+        }
 
-        $output_callback = function (string $message, bool $is_error = false) use ($section, &$section_messages) {
-            $section_messages[] = $is_error
-                ? " <error>$message</error>"
-                : " <info>$message</info>";
-            $section->overwrite(implode("\n", $section_messages));
-        };
+        $files = glob($locales_dir . '/*.po');
+        if (empty($files)) {
+            return;
+        }
 
-        LocaleCompiler::compileLocales($locales_dir, $output_callback);
-        $this->io->newLine();
+        // Check msgfmt
+        $process = new Process(['msgfmt', '--version']);
+        $process->run();
+        if (!$process->isSuccessful()) {
+            throw new \RuntimeException('msgfmt not found!');
+        }
+
+        foreach ($files as $file) {
+            $mo = preg_replace('/\.po$/', '.mo', $file);
+            $basename = basename($file);
+
+            $proc = new Process(['msgfmt', $file, '-o', $mo]);
+            $proc->run();
+
+            if (!$proc->isSuccessful()) {
+                $this->io->writeln(" <error>Failed to compile $basename</error>");
+            } else {
+                $this->io->writeln(" <info>Compiled $basename</info>");
+            }
+        }
     }
 }
