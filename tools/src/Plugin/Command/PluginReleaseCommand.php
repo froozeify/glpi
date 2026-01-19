@@ -90,7 +90,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         $this->addOption('nogithub', 'g', InputOption::VALUE_NONE, 'DO NOT Create github draft release');
         $this->addOption('check-only', 'C', InputOption::VALUE_NONE, 'Only do check, does not release anything');
         $this->addOption('dont-check', 'd', InputOption::VALUE_NONE, 'DO NOT check version');
-        $this->addOption('propose', null, InputOption::VALUE_NONE, 'Calculate and propose next possible versions');
         $this->addOption('commit', 'c', InputOption::VALUE_REQUIRED, 'Specify commit to archive (-r required)');
         $this->addOption('extra', 'e', InputOption::VALUE_REQUIRED, 'Extra version informations (-c required)');
         $this->addOption('compile-mo', 'm', InputOption::VALUE_NONE, 'Compile MO files from PO files');
@@ -118,12 +117,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
 
         if ($input->getOption('compile-mo')) {
             $this->compileMo();
-            return Command::SUCCESS;
-        }
-
-        // Propose version
-        if ($input->getOption('propose')) {
-            $this->proposeVersion();
             return Command::SUCCESS;
         }
 
@@ -373,62 +366,6 @@ final class PluginReleaseCommand extends AbstractPluginCommand
         });
 
         return end($tags) ?: null;
-    }
-
-    private function proposeVersion(): void
-    {
-        $tags = $this->getGitTags();
-        // Sort versions
-        usort($tags, function ($a, $b) {
-            if (!$this->validVersion($a)) {
-                return -1;
-            }
-            if (!$this->validVersion($b)) {
-                return 1;
-            }
-            return version_compare($a, $b);
-        });
-
-        $last = end($tags) ?: '0.0.0';
-
-        // Logic from python script
-        $last_minor = $last;
-        $last_major = '0';
-
-        // Find last major (where last digit is 0)
-        foreach ($tags as $t) {
-            if ($this->validVersion($t)) {
-                $parts = explode('.', $t);
-                if (end($parts) == '0') {
-                    $last_major = str_replace('.0', '', $t);
-                }
-            }
-        }
-
-        if ($this->output->isVerbose()) {
-            $this->io->text("Last minor: $last_minor | Last major: $last_major");
-        }
-
-        // New Minor
-        $minor_parts = explode('.', $last_minor);
-        if (end($minor_parts) == '0') {
-            $new_minor = $last_minor . '.1';
-        } else {
-            $minor_parts[count($minor_parts) - 1]++;
-            $new_minor = implode('.', $minor_parts);
-        }
-
-        // New Major
-        $major_parts = $this->getNumericVersion($last_major);
-        if ($major_parts === []) {
-            $major_parts = [0];
-        }
-        $major_parts[count($major_parts) - 1]++;
-        $new_major = implode('.', $major_parts) . '.0';
-
-        $this->io->section("Proposed versions:");
-        $this->io->text("Minor: $new_minor");
-        $this->io->text("Major: $new_major");
     }
 
     private function build(string $ver, string $ref, string $dest): void
