@@ -94,22 +94,32 @@ final class ResourcesChecker
         // Check composer dependencies
         $autoload = $this->root_dir . '/vendor/autoload.php';
         if (!file_exists($autoload)) {
+            echo 'no autoload';
             return false;
         } elseif (file_exists($this->root_dir . '/composer.lock')) {
             if (!file_exists($this->root_dir . '/.composer.hash')) {
+                echo 'no .composer.hash';
                 return false;
             } elseif (sha1_file($this->root_dir . '/composer.lock') != file_get_contents($this->root_dir . '/.composer.hash')) { // @phpstan-ignore theCodingMachineSafe.function, theCodingMachineSafe.function (Safe not installed at this point)
+                echo 'hash not matching';
+                echo sha1_file($this->root_dir . '/composer.lock') . ' - ' . file_get_contents($this->root_dir . '/.composer.hash');
                 return false;
             }
         }
 
+        echo 'composer ok';
+
         // Check node dependencies
         if (!file_exists($this->root_dir . '/public/lib')) {
+            echo 'no lib';
             return false;
         } elseif (file_exists($this->root_dir . '/package-lock.json')) {
             if (!file_exists($this->root_dir . '/.package.hash')) {
+                echo 'no package.hash';
                 return false;
             } elseif (sha1_file($this->root_dir . '/package-lock.json') != file_get_contents($this->root_dir . '/.package.hash')) { // @phpstan-ignore theCodingMachineSafe.function, theCodingMachineSafe.function (Safe not installed at this point)
+                echo 'hash not matching';
+                echo sha1_file($this->root_dir . '/package-lock.json') . ' - ' . file_get_contents($this->root_dir . '/.package.hash');
                 return false;
             }
         }
