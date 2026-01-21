@@ -154,6 +154,13 @@ final class ResourcesChecker
      */
     private function shouldCheckResources(): bool
     {
+        // Check triggered by "dependencies install" command or similar.
+        // We must skip it when running the "build_hw_jsons" script as it is running during composer install
+        // and we cannot expect dependencies/assets to be strictly valid at this point.
+        if (\str_ends_with($_SERVER['argv'][0] ?? '', 'build_hw_jsons')) {
+            return false;
+        }
+
         // The file is special and will be executed before the autoload script
         // is loaded, thus we must require the needed file manually.
         require_once($this->root_dir . '/src/Glpi/Application/Environment.php');
