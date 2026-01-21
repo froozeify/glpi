@@ -85,7 +85,7 @@ abstract class AbstractCommand extends Command
     public function getPluginName(): string
     {
         if (!$this->isPluginCommand()) {
-            throw new \LogicException('This command is not plugging command.');
+            throw new \LogicException('This command is not a plugin command.');
         }
         return $this->input->getOption('plugin');
     }
@@ -102,7 +102,7 @@ abstract class AbstractCommand extends Command
      */
     protected function isPluginOptionAvailable(): bool
     {
-        return false;
+        return $this->isRequiringPluginOption();
     }
 
     /**

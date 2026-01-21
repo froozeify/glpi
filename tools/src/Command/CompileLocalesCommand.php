@@ -71,7 +71,7 @@ final class CompileLocalesCommand extends AbstractCommand
     private function compile(string $dir): void
     {
         $locales_dir = $dir . '/locales';
-        $this->io->section("Compiling MO files");
+        $this->io->section("Compiling MO files...");
         if ($this->output->isVerbose()) {
             $this->output->writeln(" <question>Locales dir: $locales_dir</question>");
         }
