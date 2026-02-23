@@ -11,33 +11,45 @@ on:
   workflow_dispatch:
 
 jobs:
-  build-main:
-    name: "Build main branch"
+  prepare:
+    name: "Prepare"
     if: ${{ github.repository == 'glpi-project/glpi' }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
-    secrets: inherit
-    with:
-      push: true
-      glpi-version: "main"
-      image-tag: "dev-nightly"
+    runs-on: "ubuntu-latest"
+    outputs:
+      matrix: ${{ steps.matrix.outputs.matrix }}
+    steps:
+      - name: "Generate dynamic matrix"
+        id: "matrix"
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # 1. Fetch the latest major releases (last 2 only)
+          RELEASES=$(gh api 'repos/${{ github.repository }}/releases?per_page=100' | \
+            jq -c '[ .[] | select(.prerelease == false and .draft == false) ] | 
+                   reduce .[] as $item ({}; .[$item.tag_name | split(".")[0]] //= $item.tag_name) | 
+                   [to_entries[] | {name: ("Release " + .key + ".x"), major: .key, version: .value, tag: ""}] | 
+                   sort_by(.major | tonumber) | reverse | .[0:2]')
+          
+          # 2. Generate the tracking bugfixes branches from the major
+          BUGFIXES=$(echo "$RELEASES" | \
+            jq -c '[.[] | {name: (.major + ".0/bugfixes branch"), major: .major, version: (.major + ".0/bugfixes"), tag: (.major + ".0-nightly")}]')
 
-  build-11:
-    name: "Build 11.0/bugfixes branch"
-    if: ${{ github.repository == 'glpi-project/glpi' }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
-    secrets: inherit
-    with:
-      push: true
-      glpi-version: "11.0/bugfixes"
-      image-tag: "11.0-nightly"
+          MAIN='[{"name": "main branch", "major": "main", "version": "main", "tag": "dev-nightly"}]'
 
-  build-10:
-    name: "Build 10.0/bugfixes branch"
+          MATRIX=$(echo "$MAIN $BUGFIXES $RELEASES" | jq -c -s '.[0] + .[1] + .[2] | {include: .}')
+          echo "matrix=$MATRIX" >> $GITHUB_OUTPUT
+
+  build:
+    name: "Build ${{ matrix.name }}"
+    needs: [prepare]
     if: ${{ github.repository == 'glpi-project/glpi' }}
     uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
     secrets: inherit
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     with:
       push: true
-      glpi-version: "10.0/bugfixes"
-      image-tag: "10.0-nightly"
-      use-legacy-marketplace-path: true
+      glpi-version: "${{ matrix.version }}"
+      image-tag: "${{ matrix.tag }}"
+      use-legacy-marketplace-path: ${{ matrix.major == '10' }}
