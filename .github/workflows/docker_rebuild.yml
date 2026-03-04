@@ -104,7 +104,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix: ${{ fromJSON(needs.resolve.outputs.matrix) }}
-    uses: "glpi-project/docker-images/.github/workflows/glpi.yml@main"
+    uses: "froozeify/GLPI_docker-images/.github/workflows/glpi.yml@main"
     secrets: inherit
     with:
       push: true
