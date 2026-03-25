@@ -55,6 +55,7 @@ use Symfony\Component\HttpKernel\Event\ExceptionEvent;
 use Symfony\Component\HttpKernel\Kernel as BaseKernel;
 use Symfony\Component\HttpKernel\KernelEvents;
 use Symfony\Component\Routing\Loader\Configurator\RoutingConfigurator;
+use Symfony\UX\TwigComponent\TwigComponentBundle;
 use Throwable;
 
 final class Kernel extends BaseKernel
@@ -121,12 +122,13 @@ final class Kernel extends BaseKernel
         $bundles = [];
 
         $bundles[] = new FrameworkBundle();
+        $bundles[] = new TwigBundle();
+        $bundles[] = new TwigComponentBundle();
 
         if (Environment::get()->shouldEnableExtraDevAndDebugTools()) {
             $dev_bundles_classes = [
                 WebProfilerBundle::class,
                 DebugBundle::class,
-                TwigBundle::class,
             ];
             foreach ($dev_bundles_classes as $bundle_class) {
                 if (\class_exists($bundle_class)) {
@@ -203,6 +205,7 @@ final class Kernel extends BaseKernel
 
         $container->import($projectDir . '/dependency_injection/services.php', 'php');
         $container->import($projectDir . '/dependency_injection/framework.php', 'php');
+        $container->import($projectDir . '/dependency_injection/twig_component.php', 'php');
         $container->import($projectDir . '/dependency_injection/web_profiler.php', 'php');
     }
 

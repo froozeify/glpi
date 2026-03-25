@@ -74,6 +74,10 @@ return static function (ContainerConfigurator $container): void {
         'Glpi\UI\\',
         $projectDir . '/src/Glpi/UI/*Manager.php'
     );
+    $services->load(
+        'Glpi\Twig\Components\\',
+        $projectDir . '/src/Glpi/Twig/Components'
+    );
 
     // Prevent Symfony to register its own default logger.
     // @see \Symfony\Component\HttpKernel\DependencyInjection\LoggerPass

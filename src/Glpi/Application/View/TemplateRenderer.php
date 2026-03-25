@@ -54,10 +54,14 @@ use Glpi\Debug\Profiler;
 use Glpi\Kernel\Kernel;
 use Plugin;
 use Session;
+use Symfony\Component\DependencyInjection\ContainerInterface;
+use Symfony\UX\TwigComponent\Twig\ComponentExtension as UxComponentExtension;
+use Symfony\UX\TwigComponent\Twig\ComponentRuntime;
 use Twig\Environment as TwigEnvironment;
 use Twig\Extension\DebugExtension;
 use Twig\Extra\String\StringExtension;
 use Twig\Loader\FilesystemLoader;
+use Twig\RuntimeLoader\FactoryRuntimeLoader;
 
 /**
  * @since 10.0.0
@@ -132,10 +136,43 @@ class TemplateRenderer
         $this->environment->addExtension(new SessionExtension());
         $this->environment->addExtension(new TeamExtension());
 
+        $this->registerTwigComponentsRuntime();
+
         // add superglobals
         $this->environment->addGlobal('_post', $_POST);
         $this->environment->addGlobal('_get', $_GET);
         $this->environment->addGlobal('_request', $_REQUEST);
+    }
+
+    private function registerTwigComponentsRuntime(): void
+    {
+        $this->environment->addExtension(new UxComponentExtension());
+
+        $container = $this->getKernelContainer();
+        if ($container === null || !$container->has('glpi.ux.twig_component_runtime')) {
+            return;
+        }
+
+        $this->environment->addRuntimeLoader(new FactoryRuntimeLoader([
+            ComponentRuntime::class => static fn () => $container->get('glpi.ux.twig_component_runtime'),
+        ]));
+    }
+
+    private function getKernelContainer(): ?ContainerInterface
+    {
+        global $kernel;
+
+        if (!$kernel instanceof Kernel) {
+            return null;
+        }
+
+        try {
+            $container = $kernel->getContainer();
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $container instanceof ContainerInterface ? $container : null;
     }
 
     /**
