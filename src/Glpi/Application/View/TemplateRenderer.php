@@ -57,6 +57,7 @@ use Session;
 use Symfony\Component\DependencyInjection\ContainerInterface;
 use Symfony\UX\TwigComponent\Twig\ComponentExtension as UxComponentExtension;
 use Symfony\UX\TwigComponent\Twig\ComponentRuntime;
+use Symfony\UX\TwigComponent\Twig\ComponentLexer;
 use Twig\Environment as TwigEnvironment;
 use Twig\Extension\DebugExtension;
 use Twig\Extra\String\StringExtension;
@@ -137,6 +138,7 @@ class TemplateRenderer
         $this->environment->addExtension(new TeamExtension());
 
         $this->registerTwigComponentsRuntime();
+        $this->environment->setLexer(new ComponentLexer($this->environment));
 
         // add superglobals
         $this->environment->addGlobal('_post', $_POST);
