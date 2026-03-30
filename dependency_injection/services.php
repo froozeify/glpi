@@ -75,8 +75,8 @@ return static function (ContainerConfigurator $container): void {
         $projectDir . '/src/Glpi/UI/*Manager.php'
     );
     $services->load(
-        'Glpi\Twig\Components\\',
-        $projectDir . '/src/Glpi/Twig/Components'
+        'Twig\Components\\',
+        $projectDir . '/src/Twig/Components'
     );
     $services->load(
         'Glpi\Application\View\Extension\\',
