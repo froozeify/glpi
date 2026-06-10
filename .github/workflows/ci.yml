@@ -31,14 +31,12 @@ jobs:
   lint:
     # Do not run scheduled lint on tier repositories
     if: github.repository == 'glpi-project/glpi' || github.event_name != 'schedule'
+    needs: "generate-matrix"
     name: "Lint on PHP ${{ matrix.php-version }}"
     runs-on: "ubuntu-latest"
     strategy:
       fail-fast: false
-      matrix:
-        include:
-          - {php-version: "8.2"} # Lint on lower PHP version to detected too early usage of new syntaxes
-          - {php-version: "8.5"} # Lint on higher PHP version to detected deprecated elements usage
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.lint-matrix) }}
     env:
       COMPOSE_FILE: ".github/actions/docker-compose-app.yml"
       APPLICATION_ROOT: "${{ github.workspace }}"
@@ -115,49 +113,60 @@ jobs:
         run: |
           docker compose exec -T app .github/actions/lint_misc-lint.sh
 
-  generate-tests-matrix:
+  generate-matrix:
     # Do not run scheduled tests on tier repositories
     if: github.repository == 'glpi-project/glpi' || github.event_name != 'schedule'
-    name: "Generate tests matrix"
+    name: "Generate CI matrix"
     runs-on: "ubuntu-latest"
     outputs:
-      matrix: ${{ steps.generate-matrix.outputs.matrix }}
+      php-min: ${{ steps.config.outputs.php-min }}
+      php-max: ${{ steps.config.outputs.php-max }}
+      db-default: ${{ steps.config.outputs.db-default }}
+      lint-matrix: ${{ steps.config.outputs.lint-matrix }}
+      tests-matrix: ${{ steps.config.outputs.tests-matrix }}
     steps:
-      - name: "Generate matrix"
-        id: "generate-matrix"
+      - name: "Define versions and matrices"
+        id: "config"
         run: |
+          # === Central version definitions — edit here only ===
+          PHP_MIN="8.2"             # lowest supported PHP (lint: catch too-early new syntax)
+          PHP_MAX="8.5"             # highest supported PHP (lint: catch deprecated usage)
+          DB_DEFAULT="mariadb:11.8" # default DB image used by e2e/playwright + main test row
+
+          {
+            echo "php-min=$PHP_MIN"
+            echo "php-max=$PHP_MAX"
+            echo "db-default=$DB_DEFAULT"
+          } >> "$GITHUB_OUTPUT"
+
+          LINT_MATRIX="{\"include\":[{\"php-version\":\"$PHP_MIN\"},{\"php-version\":\"$PHP_MAX\"}]}"
+          echo "lint-matrix=$(echo "$LINT_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
+
           if [[ "${{ github.event_name }}" = "workflow_dispatch" || ( "${{ github.ref_type }}" = "branch" && "${{ github.ref_name }}" =~ ^(main|.*/bugfixes|security/.*)$ ) || "${{ github.ref_type }}" = "tag" ]]; then
-            MATRIX='
-              {
-                "include": [
-                  {"php-version": "8.5", "db-image": "mariadb:11.8", "run-js-tests": true},
-                  {"php-version": "8.2", "db-image": "mariadb:10.6", "run-js-tests": false},
-                  {"php-version": "8.5", "db-image": "mysql:8.4", "run-js-tests": false},
-                  {"php-version": "8.5", "db-image": "mysql:8.0", "run-js-tests": false}
-                ]
-              }
-            '
+            TESTS_MATRIX="{\"include\":[
+              {\"php-version\":\"$PHP_MAX\",\"db-image\":\"$DB_DEFAULT\",\"run-js-tests\":true},
+              {\"php-version\":\"$PHP_MIN\",\"db-image\":\"mariadb:10.6\",\"run-js-tests\":false},
+              {\"php-version\":\"$PHP_MAX\",\"db-image\":\"mysql:8.4\",\"run-js-tests\":false},
+              {\"php-version\":\"$PHP_MAX\",\"db-image\":\"mysql:8.0\",\"run-js-tests\":false}
+            ]}"
           else
-            MATRIX='
-              {
-                "include": [
-                  {"php-version": "8.5", "db-image": "mariadb:11.8", "run-js-tests": true},
-                  {"php-version": "8.2", "db-image": "mysql:8.4", "run-js-tests": false}
-                ]
-              }
-            '
+            TESTS_MATRIX="{\"include\":[
+              {\"php-version\":\"$PHP_MAX\",\"db-image\":\"$DB_DEFAULT\",\"run-js-tests\":true},
+              {\"php-version\":\"$PHP_MIN\",\"db-image\":\"mysql:8.4\",\"run-js-tests\":false}
+            ]}"
           fi
-          echo "matrix=$(echo $MATRIX | jq -c .)" >> $GITHUB_OUTPUT
+          echo "tests-matrix=$(echo "$TESTS_MATRIX" | jq -c .)" >> "$GITHUB_OUTPUT"
+
   tests:
     # Do not run scheduled tests on tier repositories
     if: github.repository == 'glpi-project/glpi' || github.event_name != 'schedule'
     name: "Test on PHP ${{ matrix.php-version }} using ${{ matrix.db-image }}"
-    needs: "generate-tests-matrix"
+    needs: "generate-matrix"
     runs-on: "ubuntu-latest"
     timeout-minutes: 60
     strategy:
       fail-fast: false
-      matrix: ${{ fromJson(needs.generate-tests-matrix.outputs.matrix) }}
+      matrix: ${{ fromJson(needs.generate-matrix.outputs.tests-matrix) }}
     env:
       COMPOSE_FILE: ".github/actions/docker-compose-app.yml:.github/actions/docker-compose-services.yml"
       APPLICATION_ROOT: "${{ github.workspace }}"
@@ -250,6 +259,7 @@ jobs:
   e2e:
     # Do not run scheduled tests on tier repositories
     if: github.repository == 'glpi-project/glpi' || github.event_name != 'schedule'
+    needs: "generate-matrix"
     permissions:
       contents: "read"
     name: "E2E and web tests using latest PHP and MariaDB versions"
@@ -258,8 +268,8 @@ jobs:
     env:
       COMPOSE_FILE: ".github/actions/docker-compose-app.yml:.github/actions/docker-compose-services.yml"
       APPLICATION_ROOT: "${{ github.workspace }}"
-      DB_IMAGE: "githubactions-mariadb:10.11"
-      PHP_IMAGE: "githubactions-php-apache:8.3"
+      DB_IMAGE: "githubactions-${{ needs.generate-matrix.outputs.db-default }}"
+      PHP_IMAGE: "githubactions-php-apache:${{ needs.generate-matrix.outputs.php-max }}"
       UPDATE_FILES_ACL: true
     steps:
       - name: "Set env"
@@ -273,9 +283,9 @@ jobs:
           path: |
             ${{ env.APP_CONTAINER_HOME }}/.cache/composer/
             ${{ env.APP_CONTAINER_HOME }}/.npm/_cacache/
-          key: "app_home_deps-8.3-${{ hashFiles('composer.lock', 'package-lock.json') }}"
+          key: "app_home_deps-${{ needs.generate-matrix.outputs.php-max }}-${{ hashFiles('composer.lock', 'package-lock.json') }}"
           restore-keys: |
-            app_home_deps-8.3-
+            app_home_deps-${{ needs.generate-matrix.outputs.php-max }}-
             app_home_deps-
       - name: "Initialize containers"
         run: |
@@ -316,6 +326,7 @@ jobs:
   playwright:
     # Do not run scheduled tests on tier repositories
     if: github.repository == 'glpi-project/glpi' || github.event_name != 'schedule'
+    needs: "generate-matrix"
     permissions:
       contents: "read"
     name: "Playwright tests (${{ matrix.shardIndex }}/${{ matrix.shardTotal }})"
@@ -329,8 +340,8 @@ jobs:
     env:
       COMPOSE_FILE: ".github/actions/docker-compose-app.yml:.github/actions/docker-compose-services.yml"
       APPLICATION_ROOT: "${{ github.workspace }}"
-      DB_IMAGE: "githubactions-mariadb:11.8"
-      PHP_IMAGE: "githubactions-php-apache:8.5"
+      DB_IMAGE: "githubactions-${{ needs.generate-matrix.outputs.db-default }}"
+      PHP_IMAGE: "githubactions-php-apache:${{ needs.generate-matrix.outputs.php-max }}"
       UPDATE_FILES_ACL: true
     steps:
       - name: "Set env"
@@ -344,9 +355,9 @@ jobs:
           path: |
             ${{ env.APP_CONTAINER_HOME }}/.composer/cache/
             ${{ env.APP_CONTAINER_HOME }}/.npm/_cacache/
-          key: "app_home_deps-8.5-${{ hashFiles('composer.lock', 'package-lock.json') }}"
+          key: "app_home_deps-${{ needs.generate-matrix.outputs.php-max }}-${{ hashFiles('composer.lock', 'package-lock.json') }}"
           restore-keys: |
-            app_home_deps-8.5-
+            app_home_deps-${{ needs.generate-matrix.outputs.php-max }}-
             app_home_deps-
       - name: "Initialize containers"
         run: |
