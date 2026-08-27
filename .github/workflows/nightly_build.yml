@@ -44,6 +44,7 @@ jobs:
             echo "build=yes" >> $GITHUB_OUTPUT
           else
             echo "build=no" >> $GITHUB_OUTPUT
+            echo "::notice::No new commit on ${{ matrix.branch }} in the last 24h — build skipped."
           fi
           REF_NAME=$(echo ${{ matrix.version-name }})
           SHA=$(git rev-parse --short HEAD)
@@ -63,16 +64,41 @@ jobs:
           docker exec --interactive ${{ job.services.app.id }} tools/make_release.sh -y . ${{ steps.vars.outputs.release_name }}
           docker cp ${{ job.services.app.id }}:/tmp/glpi-${{ steps.vars.outputs.release_name }}.tgz ${{ github.workspace }}/${{ steps.vars.outputs.release_name }}.tar.gz
           cp ${{ github.workspace }}/${{ steps.vars.outputs.release_name }}.tar.gz ${{ github.workspace }}/${{ matrix.version-name }}.tar.gz
+      - name: "Publish nightly release"
+        if: ${{ steps.vars.outputs.build == 'yes' }}
+        id: publish-nightly
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          RELEASE_TAG="nightly-${{ matrix.version-name }}"
+          ASSET_NAME="${{ matrix.version-name }}.tar.gz"
+          ASSET_PATH="${{ github.workspace }}/${ASSET_NAME}"
+          COMMIT_SHA="$(git rev-parse --short HEAD)"
+          BUILD_DATE="$(date -u +'%F %H:%M UTC')"
+          NOTES="Rolling nightly build of the \`${{ matrix.branch }}\` branch (commit \`${COMMIT_SHA}\`, built ${BUILD_DATE}). This (pre)release is updated in place every night — the asset below always points to the latest build, not a fixed version."
+
+          # Published once, then updated in place every night: unlike a git-committed file,
+          # a release asset has no 100 MiB size limit and does not bloat repository history.
+          gh release view "$RELEASE_TAG" --repo "${{ github.repository }}" >/dev/null 2>&1 || \
+            gh release create "$RELEASE_TAG" --repo "${{ github.repository }}" \
+              --prerelease \
+              --title "GLPI nightly build (${{ matrix.branch }})" \
+              --notes "$NOTES"
+
+          gh release upload "$RELEASE_TAG" "$ASSET_PATH" --repo "${{ github.repository }}" --clobber
+          gh release edit "$RELEASE_TAG" --repo "${{ github.repository }}" --notes "$NOTES"
+
+          ASSET_URL="https://github.com/${{ github.repository }}/releases/download/${RELEASE_TAG}/${ASSET_NAME}"
+          echo "asset-url=$ASSET_URL" >> "$GITHUB_OUTPUT"
+        shell: bash
       - uses: actions/checkout@v7
         if: ${{ steps.vars.outputs.build == 'yes' }}
         with:
           repository: ${{ github.repository_owner }}/glpi-project.github.io
           token: ${{ secrets.GH_PUBLISHING_TOKEN }}
-          fetch-depth: 0
           path: nightly
-      - name: "Publish nightly"
+      - name: "Update nightly index page"
         if: ${{ steps.vars.outputs.build == 'yes' }}
-        id: publish-nightly
         run: |
           EMAIL="$(git log --format='%ae' HEAD^!)"
           NAME="$(git log --format='%an' HEAD^!)"
@@ -80,23 +106,17 @@ jobs:
           cd nightly
           git config --local user.email "$EMAIL"
           git config --local user.name "$NAME"
-          echo "Removing previous ${{ matrix.branch }} builds"
-          git filter-branch --prune-empty -f --index-filter 'git rm --cached --ignore-unmatch "glpi/${{ matrix.version-name }}.tar.gz"' HEAD
-          git filter-branch --prune-empty -f --index-filter 'git rm --cached --ignore-unmatch "glpi/${{ matrix.version-name }}-*.tar.gz"' HEAD
-          cp -vf ${{ github.workspace }}/${{ matrix.version-name }}.tar.gz glpi
-          cp -vf ${{ github.workspace }}/${{ steps.vars.outputs.release_name }}.tar.gz glpi
-          # script argument should be the ordered list of builds to index
-          ../tools/github-nightly-description.sh `ls -r glpi/*-*.tar.gz` > glpi/index.md
-          echo "Repository status:"
-          git status
-          ls -lt glpi
-          # Prepare commit
-          echo "Adding GLPI ${{ steps.vars.outputs.release_name }} build"
-          git add glpi/*
-          git commit -m "Add GLPI ${{ steps.vars.outputs.release_name }} nightly build"
-          # Force commit
-          git push --force
-          git status
+          ../tools/github-nightly-description.sh \
+            glpi/nightly-builds.tsv \
+            glpi/index.md \
+            "${{ matrix.version-name }}" \
+            "${{ steps.publish-nightly.outputs.asset-url }}" \
+            "$(stat -c %s ${{ github.workspace }}/${{ matrix.version-name }}.tar.gz)"
+          git add glpi/index.md glpi/nightly-builds.tsv
+          if git diff --cached --quiet; then
+            echo "Index page already up to date, nothing to push."
+          else
+            git commit -m "Update nightly build index (${{ matrix.version-name }})"
+            git push
+          fi
         shell: bash
-        env:
-          FILTER_BRANCH_SQUELCH_WARNING: 1

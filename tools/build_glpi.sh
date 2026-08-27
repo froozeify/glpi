@@ -44,12 +44,18 @@ then
     exit 1
 fi
 
+# A release archive must always be built with the production environment.
+# Some build containers (e.g. ghcr.io/glpi-project/githubactions-php) export
+# GLPI_ENVIRONMENT_TYPE=testing, which would make the kernel load test-only resources
+# and write its cache into tests/files instead of files.
+export GLPI_ENVIRONMENT_TYPE=production
+
 echo "Installing dependencies..."
 # PHP dev dependencies are usefull at this point as they are used by some build operations
 $WORKING_DIR/bin/console dependencies install --composer-options="--ignore-platform-reqs --prefer-dist --no-progress"
 
 echo "Compiling locale files..."
-$WORKING_DIR/bin/console tools:locales:compile
+$WORKING_DIR/bin/console tools:locales:compile --env=production
 
 echo "Moving JS files into the /public directory..."
 for file in $(find $WORKING_DIR/js -type f ! -path "$WORKING_DIR/js/src/*")
@@ -67,7 +73,7 @@ find $WORKING_DIR/public \( -iname "*.js" ! -iname "*.min.js" \) \
     -exec sh -c 'echo "> {}" && '"$WORKING_DIR"'/node_modules/.bin/terser {} --mangle --output $(dirname {})/$(basename {} ".js").min.js' \;
 
 echo "Compiling SCSS..."
-$WORKING_DIR/bin/console build:compile_scss
+$WORKING_DIR/bin/console build:compile_scss --env=production
 
 echo "Removing dev files and directories..."
 # Remove PHP dev dependencies that are not anymore used
@@ -110,8 +116,13 @@ do
     rm -rf $WORKING_DIR/$node
 done
 
+echo "Removing sourcemaps..."
+# Sourcemaps are only referenced by the non-minified assets (kept for GLPI debug mode)
+# and are not needed in a release archive.
+find $WORKING_DIR/public -name "*.map" -delete
+
 echo "Generating file manifest..."
-$WORKING_DIR/bin/console build:generate_code_manifest -a crc32c
+$WORKING_DIR/bin/console build:generate_code_manifest -a crc32c --env=production
 
 echo "Removing user generated files..."
 # Remove user generated files (i.e. cache and log from CLI commands ran during release)

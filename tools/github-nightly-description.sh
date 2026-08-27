@@ -33,7 +33,34 @@
 # ---------------------------------------------------------------------
 #
 
-cat <<HEADER
+# Nightly builds are now published as GitHub release assets (see nightly_build.yml) rather
+# than committed to this repository, so this script no longer inspects local tarballs/git log.
+# It records one row per branch in a small state file, then regenerates the index page from it.
+#
+# Usage: github-nightly-description.sh <data-file> <index-file> <version> <download-url> <size-bytes>
+
+if [ "$#" -ne 5 ]
+then
+    echo "Usage: $0 <data-file> <index-file> <version> <download-url> <size-bytes>"
+    exit 1
+fi
+
+DATA_FILE=$1
+INDEX_FILE=$2
+VERSION=$3
+URL=$4
+SIZE=$5
+DATE=$(date -u +"%F %T UTC")
+
+# Upsert the row for $VERSION (tab-separated: version, url, date, size), keep it sorted.
+touch "$DATA_FILE"
+grep -v -P "^${VERSION}\t" "$DATA_FILE" > "$DATA_FILE.tmp" || true
+printf '%s\t%s\t%s\t%s\n' "$VERSION" "$URL" "$DATE" "$SIZE" >> "$DATA_FILE.tmp"
+sort -o "$DATA_FILE" "$DATA_FILE.tmp"
+rm -f "$DATA_FILE.tmp"
+
+{
+    cat <<HEADER
 ---
 layout: default
 title: GLPI Nightly Builds
@@ -43,25 +70,14 @@ Version|Archive|Build date|Size
 ---|---|---|---
 HEADER
 
-for file in $*
-do
-    NAME="${file#glpi/}"
-    VERSION="${NAME%-*.tar.gz}"
-    SIZE=$( stat -c %s "$file" )
-    read DATE TIME TZ <<<$(git log -n1 --pretty=%ci -- $file)
-    [ "$TZ" == "+0000" ] && TZ="UTC"
-    # Set current date if archive still not commited
-    if [ -z "$DATE" ]; then
-        DATE=$(date -u +"%F")
-        TIME=$(date -u +"%T")
-        TZ="UTC"
-    fi
-    cat <<DESCRIPTION
-$VERSION|[$NAME]($NAME)|$DATE $TIME $TZ|$SIZE
-DESCRIPTION
-done
+    while IFS=$'\t' read -r row_version row_url row_date row_size
+    do
+        FILENAME="${row_url##*/}"
+        echo "$row_version|[$FILENAME]($row_url)|$row_date|$row_size"
+    done < "$DATA_FILE"
 
-cat <<FOOTER
+    cat <<FOOTER
 
 <font size="1">Page generated on $( date -u +'%F %H:%M:%S UTC' )</font>
 FOOTER
+} > "$INDEX_FILE"
