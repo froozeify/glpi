@@ -90,7 +90,9 @@ return static function (ContainerConfigurator $container): void {
     // Test-only controllers (e2e/Playwright/Cypress helper endpoints), routed via
     // routes/testing.php and routes/e2e_testing.php. Registered as services only in
     // test environments so they can be autowired; they are never routable elsewhere.
-    if (Environment::get()->shouldEnableTestResources()) {
+    // The is_dir() check guards against a release archive being built (or run) with an
+    // ambient GLPI_ENVIRONMENT_TYPE=testing/e2e_testing while tests/ has been stripped out.
+    if (Environment::get()->shouldEnableTestResources() && is_dir($projectDir . '/tests/src/Controller')) {
         $services->load('Glpi\Tests\Controller\\', $projectDir . '/tests/src/Controller');
     }
 
